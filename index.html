@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mein Vokabeltrainer</title>
+    <meta
+      name="description"
+      content="Modernes Werkzeug zum Scannen, Organisieren und Lernen von Vokabeln."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-wrap">
+          <div class="brand-badge">V</div>
+          <div>
+            <p class="eyebrow">Dashboard</p>
+            <h1>Mein Vokabeltrainer</h1>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <select id="collectionSelector" aria-label="Sammlung auswählen"></select>
+          <button class="secondary-btn" id="newCollectionBtn">+ Sammlung</button>
+        </div>
+      </header>
+
+      <main class="main-panel">
+        <section id="screen-home" class="screen active">
+          <div class="hero-card">
+            <div class="hero-copy">
+              <span class="eyebrow accent">Persönlicher Lernplan</span>
+              <h2>Scanne deine Vokabeln und lerne sie ganz einfach mit deinem persönlichen Vokabeltrainer.</h2>
+              <p>
+                Lade Bilder aus deinem Schulbuch hoch, erkenne Wörter automatisch, prüfe die Zuordnung und
+                beginne mit gezielten Lernrunden.
+              </p>
+              <button class="primary-btn big-btn" id="openScanBtn">+ Vokabeln scannen</button>
+            </div>
+            <div class="hero-visual">
+              <div class="visual-card">
+                <div class="mini-stat">
+                  <span>Gesamt</span>
+                  <strong id="homeTotalWords">0</strong>
+                </div>
+                <div class="mini-stat">
+                  <span>Beherrscht</span>
+                  <strong id="homeMasteredWords">0</strong>
+                </div>
+                <div class="mini-stat">
+                  <span>Zu üben</span>
+                  <strong id="homePendingWords">0</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="screen-scan" class="screen">
+          <div class="card scan-card">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow accent">Scan-Bereich</p>
+                <h3>Vokabeln erfassen</h3>
+              </div>
+              <button class="ghost-btn" id="backHomeBtn">Zurück</button>
+            </div>
+
+            <div class="scan-options">
+              <button class="scan-mode active" data-mode="paired">A. Deutsch + Englisch</button>
+              <button class="scan-mode" data-mode="german">B. Nur Deutsch</button>
+              <button class="scan-mode" data-mode="english">C. Nur Englisch</button>
+            </div>
+
+            <div class="upload-section">
+              <label class="upload-box" for="fileInput">
+                <input id="fileInput" type="file" accept=".png,.jpg,.jpeg,.pdf,image/*" />
+                <span class="upload-icon">⬆</span>
+                <span id="primaryUploadText">Bild oder PDF hochladen</span>
+                <small id="primaryUploadMeta">JPG, PNG, PDF · Kamera direkt möglich</small>
+              </label>
+              <button class="secondary-btn" id="captureBtn">Kamera öffnen</button>
+              <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
+            </div>
+
+            <div id="secondaryUploadSection" class="upload-section secondary-upload hidden">
+              <label class="upload-box" for="secondaryFileInput">
+                <input id="secondaryFileInput" type="file" accept=".png,.jpg,.jpeg,.pdf,image/*" />
+                <span class="upload-icon">⬆</span>
+                <span id="secondaryUploadText">Zweites Bild hochladen</span>
+                <small id="secondaryUploadMeta">Deutsch oder Englisch ergänzen</small>
+              </label>
+            </div>
+
+            <div class="preview-wrap">
+              <img id="scanPreview" alt="Vorschau" hidden />
+              <canvas id="scanCanvas" hidden></canvas>
+            </div>
+
+            <div class="scan-actions">
+              <button class="primary-btn" id="runScanBtn">Texterkennung starten</button>
+            </div>
+
+            <div id="ocrStatus" class="status-box">Bereit für den Scan.</div>
+          </div>
+        </section>
+
+        <section id="screen-review" class="screen">
+          <div class="card review-card">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow accent">Vorschau</p>
+                <h3>Vokabelliste prüfen</h3>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Deutsch</th>
+                    <th>Englisch</th>
+                    <th>Status</th>
+                    <th>Aktion</th>
+                  </tr>
+                </thead>
+                <tbody id="reviewTableBody"></tbody>
+              </table>
+            </div>
+
+            <div class="review-actions">
+              <button class="primary-btn" id="applyWordsBtn">Vokabeln übernehmen und lernen</button>
+              <button class="ghost-btn" id="editScanAgainBtn">Neu scannen</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="screen-learning" class="screen">
+          <div class="card learning-card">
+            <div class="progress-header">
+              <div>
+                <p class="eyebrow accent">Lernbereich</p>
+                <h3 id="learningTitle">Vokabeln</h3>
+              </div>
+              <div class="stats-inline">
+                <span id="progressText">Vokabel 0 von 0</span>
+              </div>
+            </div>
+
+            <div class="progress-bar-wrap">
+              <div class="progress-bar">
+                <div id="learningProgressFill" class="progress-fill"></div>
+              </div>
+              <div class="progress-meta">
+                <span id="progressPercent">0 % geschafft</span>
+                <span id="progressSummary">0 richtig · 0 zu üben</span>
+              </div>
+            </div>
+
+            <div class="learning-card-body">
+              <div class="word-card" id="wordCard">
+                <div class="card-flag" id="cardFlag">Englisch</div>
+                <div class="word-main" id="wordMain">continue</div>
+                <div class="word-answer hidden" id="wordAnswer">Deutsch: weitermachen</div>
+              </div>
+            </div>
+
+            <div class="card-actions">
+              <button class="primary-btn" id="revealBtn">Aufdecken</button>
+              <button class="secondary-btn" id="speakerBtn" aria-label="Englisch vorlesen">🔊</button>
+            </div>
+
+            <div class="learning-actions hidden" id="learningButtons">
+              <button class="success-btn" id="knownBtn">Gewusst</button>
+              <button class="danger-btn" id="retryBtn">Nochmal lernen</button>
+            </div>
+
+            <div class="learning-controls">
+              <button class="ghost-btn" id="repeatAllBtn">Alle Vokabeln wiederholen</button>
+              <button class="ghost-btn" id="difficultOnlyBtn">Nur schwierige Vokabeln</button>
+              <button class="ghost-btn" id="reverseBtn">Lernrichtung umdrehen</button>
+              <button class="ghost-btn" id="shuffleBtn">Erneut mischen</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="screen-collections" class="screen">
+          <div class="card collections-card">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow accent">Sammlungen</p>
+                <h3>Meine Lernsets</h3>
+              </div>
+              <button class="secondary-btn" id="collectionsNewBtn">+ Neue Sammlung</button>
+            </div>
+            <div id="collectionsList" class="collections-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="nameModal" class="modal-backdrop hidden" aria-hidden="true">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <h3 id="modalTitle">Sammlung benennen</h3>
+        <label class="modal-label" for="modalInput">Name</label>
+        <input id="modalInput" class="modal-input" type="text" />
+        <div class="modal-actions">
+          <button id="modalCancelBtn" class="ghost-btn" type="button">Abbrechen</button>
+          <button id="modalConfirmBtn" class="primary-btn" type="button">Speichern</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
