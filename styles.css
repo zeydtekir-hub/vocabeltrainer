@@ -2,9 +2,8 @@
   --bg: #f5f9ff;
   --bg-strong: #edf4ff;
   --card: #ffffff;
-  --card-strong: #ffffff;
-  --primary: #2d6cdf;
-  --primary-dark: #1a4ea8;
+  --primary: #3e7cff;
+  --primary-dark: #234db8;
   --primary-soft: #edf4ff;
   --text: #1d2b39;
   --muted: #5d6f82;
@@ -26,7 +25,7 @@ html, body {
   margin: 0;
   min-height: 100%;
   font-family: "Inter", sans-serif;
-  background: var(--bg);
+  background: linear-gradient(180deg, #edf5ff 0%, #f7f9fc 100%);
   color: var(--text);
 }
 
@@ -70,7 +69,7 @@ img, canvas {
   display: grid;
   place-items: center;
   border-radius: 16px;
-  background: linear-gradient(135deg, var(--primary), #67a8ff);
+  background: linear-gradient(135deg, var(--primary), #6d9dff);
   color: white;
   font-size: 1.7rem;
   font-weight: 800;
@@ -110,7 +109,7 @@ select {
   border: 1px solid rgba(71, 134, 223, 0.18);
   border-radius: 12px;
   padding: 0.8rem 1rem;
-  min-width: 200px;
+  min-width: 220px;
   color: var(--text);
 }
 
@@ -133,6 +132,7 @@ select {
   border: 1px solid rgba(102, 146, 214, 0.12);
   border-radius: var(--radius-xl);
   padding: 24px;
+  box-shadow: var(--shadow);
 }
 
 .hero-card {
@@ -143,6 +143,7 @@ select {
   border-radius: var(--radius-xl);
   padding: clamp(20px, 3vw, 36px);
   gap: 24px;
+  box-shadow: var(--shadow);
 }
 
 .hero-copy {
@@ -153,7 +154,7 @@ select {
 
 .hero-copy h2 {
   margin-bottom: 16px;
-  font-size: clamp(2rem, 3vw, 3.3rem);
+  font-size: clamp(2rem, 3vw, 3.1rem);
   line-height: 1.12;
   letter-spacing: -0.05em;
 }

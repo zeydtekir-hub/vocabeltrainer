@@ -15,6 +15,8 @@ const state = {
   isCardRevealed: false,
 };
 
+const APP_NAME = 'VocabFlow';
+
 const elements = {
   screens: {
     home: document.getElementById('screen-home'),
@@ -73,8 +75,17 @@ const elements = {
 };
 
 function createDemoCollection() {
-  state.collections = [];
-  state.selectedCollectionId = null;
+  state.collections = [
+    {
+      id: crypto.randomUUID(),
+      name: `${APP_NAME} Start`,
+      items: [
+        { id: crypto.randomUUID(), de: 'Hallo', en: 'Hello', correct: 1, mistakes: 0 },
+        { id: crypto.randomUUID(), de: 'Buch', en: 'Book', correct: 1, mistakes: 0 },
+      ],
+    },
+  ];
+  state.selectedCollectionId = state.collections[0].id;
   saveCollections();
 }
 
@@ -145,16 +156,14 @@ function getCollectionStats(collection) {
   const total = collection.items.length;
   const mastered = collection.items.filter((item) => (item.correct || 0) >= 3).length;
   const pending = total - mastered;
-  const wrong = collection.items.filter((item) => (item.mistakes || 0) > 0).length;
-  return { total, mastered, pending, wrong };
+  return { total, mastered, pending };
 }
 
 function renderCollectionSelector() {
   const current = getActiveCollection();
   const options = state.collections
     .map(
-      (collection) =>
-        `<option value="${collection.id}" ${collection.id === (current ? current.id : '') ? 'selected' : ''}>${collection.name}</option>`
+      (collection) => `<option value="${collection.id}" ${collection.id === (current ? current.id : '') ? 'selected' : ''}>${collection.name}</option>`
     )
     .join('');
 
@@ -252,26 +261,29 @@ function handleFileSelection(file, isSecondary = false) {
 }
 
 async function renderPdfPreview(file) {
-  const arrayBuffer = await file.arrayBuffer();
   const pdfjsLib = window.pdfjsLib;
-
   if (!pdfjsLib) {
-    setStatus('PDF-Rendering ist derzeit nicht verfügbar.', true);
+    setStatus('PDF-Vorschau ist derzeit nicht verfügbar.', true);
     return;
   }
 
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const page = await pdf.getPage(1);
-  const viewport = page.getViewport({ scale: 1.2 });
-  const canvas = elements.canvas;
-  const context = canvas.getContext('2d');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-
-  await page.render({ canvasContext: context, viewport }).promise;
-  elements.canvas.hidden = false;
-  elements.previewImage.hidden = true;
-  elements.previewImage.removeAttribute('src');
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1.2 });
+    const canvas = elements.canvas;
+    const context = canvas.getContext('2d');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: context, viewport }).promise;
+    elements.canvas.hidden = false;
+    elements.previewImage.hidden = true;
+    elements.previewImage.removeAttribute('src');
+  } catch (error) {
+    console.error('PDF render failed:', error);
+    setStatus('Das PDF konnte nicht geladen werden.', true);
+  }
 }
 
 async function ocrFile(file, languageMode = state.scanMode) {
@@ -310,9 +322,7 @@ function looksLikeSentenceText(value) {
   if (/[.!?]/.test(normalized)) return true;
 
   const sentenceWords = /\b(the|and|when|what|this|that|they|she|he|it|was|were|is|are|of|to|in|on|for|with|from|by|i|we|you|me|him|her|them|a|an)\b/i;
-  if (sentenceWords.test(normalized) && words.length > 2) return true;
-
-  return false;
+  return sentenceWords.test(normalized) && words.length > 2;
 }
 
 function validateGrammarPair(deValue, enValue) {
@@ -327,20 +337,6 @@ function validateGrammarPair(deValue, enValue) {
   const enWords = en.split(/\s+/).filter(Boolean);
 
   if (deWords.length > 3 || enWords.length > 3) return false;
-
-  const sentenceTriggers = new Set([
-    'what', 'when', 'where', 'why', 'who', 'how', 'this', 'that', 'these', 'those',
-    'they', 'he', 'she', 'it', 'we', 'i', 'you', 'were', 'was', 'is', 'are', 'am', 'have', 'has',
-    'had', 'do', 'does', 'did', 'not', 'the', 'a', 'an', 'and', 'or', 'but', 'if', 'then'
-  ]);
-
-  const germanTriggers = new Set([
-    'der', 'die', 'das', 'und', 'oder', 'aber', 'wenn', 'dass', 'ich', 'du', 'er', 'sie', 'wir', 'ihr', 'das', 'mit', 'auf', 'im', 'am', 'bei'
-  ]);
-
-  if (enWords.some((word) => sentenceTriggers.has(word.toLowerCase())) && enWords.length > 1) return false;
-  if (deWords.some((word) => germanTriggers.has(word.toLowerCase())) && deWords.length > 1) return false;
-
   return true;
 }
 
@@ -356,39 +352,24 @@ function parseRecognizedText(text, mode) {
     const cleaned = line.replace(/[^\p{L}\p{N}\s|\t\-']/gu, ' ').replace(/\s+/g, ' ').trim();
     if (!cleaned) continue;
 
-    const lowerLine = cleaned.toLowerCase();
-    if (lowerLine === 'deutsch' || lowerLine === 'english' || lowerLine === 'deutsch | englisch' || lowerLine === 'englisch | deutsch') {
-      continue;
-    }
-
     const splitByPipe = cleaned.split('|').map((part) => part.trim()).filter(Boolean);
-    if (splitByPipe.length >= 3) {
+    if (splitByPipe.length >= 2) {
       const left = normalizeWord(splitByPipe[0]);
       const right = normalizeWord(splitByPipe[splitByPipe.length - 1]);
-      if (left && right && !looksLikeSentenceText(splitByPipe[1])) {
+      if (left && right && !looksLikeSentenceText(splitByPipe[1] || '')) {
         items.push({ de: left, en: right, uncertain: false });
       }
       continue;
     }
 
     const byTabs = cleaned.split(/\t+/).map((part) => normalizeWord(part)).filter(Boolean);
-    if (byTabs.length >= 3) {
+    if (byTabs.length >= 2) {
       const left = byTabs[0];
       const right = byTabs[byTabs.length - 1];
-      if (left && right && !looksLikeSentenceText(byTabs[1] || '')) {
+      if (left && right && !looksLikeSentenceText(byTabs.slice(1).join(' '))) {
         items.push({ de: left, en: right, uncertain: false });
       }
       continue;
-    }
-
-    const tokens = cleaned.match(/[\p{L}\p{N}'-]+/gu) || [];
-    if (tokens.length >= 2) {
-      const words = tokens.map((token) => normalizeWord(token)).filter(Boolean);
-      if (words.length === 2 && !looksLikeSentenceText(cleaned)) {
-        const [de, en] = words;
-        items.push({ de, en, uncertain: false });
-        continue;
-      }
     }
 
     if (mode === 'paired') {
@@ -396,8 +377,8 @@ function parseRecognizedText(text, mode) {
       if (parts.length >= 2) {
         const left = parts[0];
         const right = parts[parts.length - 1];
-        if (left && right && !looksLikeSentenceText(parts.slice(1).join(' '))) {
-          items.push({ de: left, en: right, uncertain: true });
+        if (left && right) {
+          items.push({ de: left, en: right, uncertain: !validateGrammarPair(left, right) });
         }
       }
     }
@@ -463,130 +444,6 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
-async function lookupDictionaryWord(word, lang) {
-  const cleanWord = normalizeWord(word);
-  if (!cleanWord) return null;
-
-  try {
-    const url = `https://api.dictionaryapi.dev/api/v2/entries/${lang}/${encodeURIComponent(cleanWord)}`;
-    const response = await fetch(url);
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    if (!Array.isArray(data) || !data.length) return null;
-
-    return cleanWord;
-  } catch (error) {
-    return null;
-  }
-}
-
-async function correctWordByDictionary(word, lang) {
-  const normalized = normalizeWord(word);
-  if (!normalized) return '';
-
-  const known = await lookupDictionaryWord(normalized, lang);
-  if (known) return known;
-
-  const targetLang = lang === 'de' ? 'en' : 'de';
-  const translated = await translateWordList([normalized], lang, targetLang);
-  if (translated && translated[0]) {
-    const corrected = normalizeWord(translated[0]);
-    if (corrected) return corrected;
-  }
-
-  return normalized;
-}
-
-async function validateAgainstDictionary(words, lang) {
-  const result = [];
-
-  for (const word of words) {
-    const normalized = normalizeWord(word);
-    if (!normalized) continue;
-
-    const corrected = await correctWordByDictionary(normalized, lang);
-    result.push({ original: normalized, corrected, valid: corrected === normalized || Boolean(await lookupDictionaryWord(normalized, lang)) });
-  }
-
-  return result;
-}
-
-async function translateWordList(words, sourceLang, targetLang) {
-  const uniqueWords = [...new Set(words.map((word) => normalizeWord(word)).filter(Boolean))];
-  if (!uniqueWords.length) return [];
-
-  const endpoints = [
-    'https://translate.argosopentech.com/translate',
-    'https://libretranslate.de/translate',
-  ];
-
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          q: uniqueWords,
-          source: sourceLang,
-          target: targetLang,
-          format: 'text',
-        }),
-      });
-
-      if (!response.ok) continue;
-      const data = await response.json();
-
-      if (Array.isArray(data)) {
-        const translated = data.map((entry) => normalizeWord(entry?.translatedText || entry?.text || ''));
-        if (translated.length === uniqueWords.length) {
-          const map = new Map(uniqueWords.map((word, index) => [word, translated[index]]));
-          return words.map((word) => map.get(normalizeWord(word)) || '');
-        }
-      }
-
-      if (Array.isArray(data?.translations)) {
-        const translated = data.translations.map((entry) => normalizeWord(entry?.translatedText || ''));
-        if (translated.length === uniqueWords.length) {
-          const map = new Map(uniqueWords.map((word, index) => [word, translated[index]]));
-          return words.map((word) => map.get(normalizeWord(word)) || '');
-        }
-      }
-    } catch (error) {
-      console.warn('Translation endpoint failed:', endpoint, error);
-    }
-  }
-
-  return null;
-}
-
-async function buildPairedList(primaryWords, secondaryWords, primaryLang, secondaryLang) {
-  const pairs = [];
-  const maxLength = Math.max(primaryWords.length, secondaryWords.length);
-
-  for (let index = 0; index < maxLength; index += 1) {
-    const primaryValue = primaryWords[index] || '';
-    const secondaryValue = secondaryWords[index] || '';
-    const de = primaryLang === 'de' ? primaryValue : secondaryValue;
-    const en = primaryLang === 'en' ? primaryValue : secondaryValue;
-
-    if (de || en) {
-      const normalizedDe = normalizeWord(de);
-      const normalizedEn = normalizeWord(en);
-      const correctedDe = normalizedDe ? await correctWordByDictionary(normalizedDe, 'de') : '';
-      const correctedEn = normalizedEn ? await correctWordByDictionary(normalizedEn, 'en') : '';
-
-      pairs.push({
-        de: primaryLang === 'de' ? correctedDe : correctedEn,
-        en: primaryLang === 'en' ? correctedEn : correctedDe,
-        uncertain: !validateGrammarPair(primaryLang === 'de' ? correctedDe : correctedEn, primaryLang === 'en' ? correctedEn : correctedDe),
-      });
-    }
-  }
-
-  return pairs.filter((item) => item.de || item.en);
-}
-
 async function handleScan() {
   if (!state.selectedFile) {
     setStatus('Bitte lade zuerst ein Bild oder PDF hoch.', true);
@@ -629,7 +486,22 @@ async function handleScan() {
       const primaryWords = primaryParsed.map((item) => (primaryLanguage === 'de' ? item.de : item.en)).filter(Boolean);
       const secondaryWords = secondaryParsed.map((item) => (secondaryLanguage === 'de' ? item.de : item.en)).filter(Boolean);
 
-      state.reviewDraft = await buildPairedList(primaryWords, secondaryWords, primaryLanguage, secondaryLanguage);
+      const pairCount = Math.max(primaryWords.length, secondaryWords.length);
+      const pairs = [];
+
+      for (let index = 0; index < pairCount; index += 1) {
+        const left = primaryWords[index] || '';
+        const right = secondaryWords[index] || '';
+
+        if (!left && !right) continue;
+        const de = primaryLanguage === 'de' ? left : right;
+        const en = primaryLanguage === 'en' ? left : right;
+        if (de || en) {
+          pairs.push({ de: normalizeWord(de), en: normalizeWord(en), uncertain: !validateGrammarPair(de, en) });
+        }
+      }
+
+      state.reviewDraft = pairs.filter((item) => item.de || item.en);
 
       if (!state.reviewDraft.length) {
         setStatus('Es konnten keine passenden Vokabeln zwischen den beiden Bildern erkannt werden.', true);
@@ -653,11 +525,8 @@ async function handleScan() {
 
 function ensureCollectionName() {
   const currentCollection = getActiveCollection();
-  if (currentCollection) {
-    return currentCollection.name;
-  }
-
-  return 'Englisch Sammlung';
+  if (currentCollection) return currentCollection.name;
+  return `${APP_NAME} Sammlung`;
 }
 
 function openNameModal({ title, defaultValue, onConfirm }) {
@@ -668,17 +537,17 @@ function openNameModal({ title, defaultValue, onConfirm }) {
   elements.nameModal.classList.remove('hidden');
   elements.nameModal.setAttribute('aria-hidden', 'false');
 
-  const handler = () => {
+  const finalize = () => {
     const value = elements.modalInput.value.trim();
     elements.nameModal.classList.add('hidden');
     elements.nameModal.setAttribute('aria-hidden', 'true');
     elements.modalConfirmBtn.onclick = null;
     elements.modalCancelBtn.onclick = null;
     elements.modalInput.onkeydown = null;
-    onConfirm(value || defaultValue || 'Neue Sammlung');
+    onConfirm(value || defaultValue || `${APP_NAME} Sammlung`);
   };
 
-  elements.modalConfirmBtn.onclick = handler;
+  elements.modalConfirmBtn.onclick = finalize;
   elements.modalCancelBtn.onclick = () => {
     elements.nameModal.classList.add('hidden');
     elements.nameModal.setAttribute('aria-hidden', 'true');
@@ -687,12 +556,8 @@ function openNameModal({ title, defaultValue, onConfirm }) {
     elements.modalInput.onkeydown = null;
   };
   elements.modalInput.onkeydown = (event) => {
-    if (event.key === 'Enter') {
-      handler();
-    }
-    if (event.key === 'Escape') {
-      elements.modalCancelBtn.click();
-    }
+    if (event.key === 'Enter') finalize();
+    if (event.key === 'Escape') elements.modalCancelBtn.click();
   };
 }
 
@@ -706,14 +571,7 @@ function createOrUpdateCollectionFromReview() {
     .map((item) => {
       const de = normalizeWord(item.de || '');
       const en = normalizeWord(item.en || '');
-      return {
-        id: crypto.randomUUID(),
-        de,
-        en,
-        correct: 0,
-        mistakes: 0,
-        uncertain: !!item.uncertain,
-      };
+      return { id: crypto.randomUUID(), de, en, correct: 0, mistakes: 0, uncertain: !!item.uncertain };
     })
     .filter((item) => item.de || item.en);
 
@@ -726,7 +584,7 @@ function createOrUpdateCollectionFromReview() {
     title: 'Sammlung benennen',
     defaultValue: ensureCollectionName(),
     onConfirm: (targetName) => {
-      const trimmedName = targetName.trim() || 'Neue Sammlung';
+      const trimmedName = targetName.trim() || `${APP_NAME} Sammlung`;
 
       let targetCollection = state.collections.find((collection) => collection.id === state.selectedCollectionId);
       if (!targetCollection) {
@@ -746,11 +604,7 @@ function createOrUpdateCollectionFromReview() {
       for (const item of cleaned) {
         const key = `${(item.de || '').toLowerCase()}|${(item.en || '').toLowerCase()}`;
         if (!existingByKey.has(key)) {
-          targetCollection.items.push({
-            ...item,
-            de: item.de || '',
-            en: item.en || '',
-          });
+          targetCollection.items.push({ ...item, de: item.de || '', en: item.en || '' });
         }
       }
 
@@ -765,20 +619,10 @@ function createOrUpdateCollectionFromReview() {
 }
 
 function buildDeck({ difficultOnly = false, reverseDirection = false } = {}) {
-  if (!state.collections.length) {
-    return [];
-  }
-
   const collection = getActiveCollection();
-  if (!collection || !collection.items.length) {
-    return [];
-  }
+  if (!collection || !collection.items.length) return [];
 
-  let items = collection.items.filter((item) => (item.de || item.en) && (item.de && item.en));
-  if (!items.length) {
-    return [];
-  }
-
+  let items = collection.items.filter((item) => item.de && item.en);
   if (difficultOnly) {
     items = items.filter((item) => (item.mistakes || 0) > 0 || (item.correct || 0) < 2);
   }
@@ -816,12 +660,10 @@ function renderLearningCard() {
   }
 
   const card = state.learningQueue[state.learningIndex] || state.learningQueue[0];
+  if (!card) return;
+
   const directionLabel = state.learningDirection === 'de-to-en' ? 'Deutsch → Englisch' : 'Englisch → Deutsch';
   const showGerman = state.learningDirection === 'en-to-de';
-
-  if (!card) {
-    return;
-  }
 
   elements.learningTitle.textContent = `${collection.name} · ${directionLabel}`;
   elements.cardFlag.textContent = showGerman ? 'Englisch' : 'Deutsch';
@@ -849,18 +691,18 @@ function speakEnglishWord(word) {
   utterance.lang = 'en-US';
   utterance.rate = 0.9;
   utterance.pitch = 1;
+
   const voices = window.speechSynthesis.getVoices();
   const preferred = voices.find((voice) => /en-US|en-GB/i.test(voice.lang)) || voices.find((voice) => voice.lang.startsWith('en'));
   if (preferred) utterance.voice = preferred;
+
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
 }
 
 function startLearning({ forceReset = false } = {}) {
   const collection = getActiveCollection();
-  if (!collection) {
-    return;
-  }
+  if (!collection) return;
 
   if (forceReset || !state.learningQueue.length) {
     state.learningQueue = buildDeck({
@@ -890,9 +732,7 @@ function updateCollectionItem(itemId, deltaCorrect, deltaMistakes) {
 }
 
 function advanceLearningCard() {
-  if (!state.learningQueue.length) {
-    return;
-  }
+  if (!state.learningQueue.length) return;
 
   state.learningIndex += 1;
   if (state.learningIndex >= state.learningQueue.length) {
@@ -905,10 +745,7 @@ function advanceLearningCard() {
     }
     if (collection) {
       const stats = getCollectionStats(collection);
-      const total = stats.total;
-      const correct = stats.mastered;
-      const summary = `Super gemacht! Du hast ${total} Vokabeln gelernt.\n- ${correct} richtig\n- ${stats.pending} noch zu üben`;
-      alert(summary);
+      alert(`Super gemacht! Du hast ${stats.total} Vokabeln im Blick.\n- ${stats.mastered} richtig\n- ${stats.pending} noch zu üben`);
     }
   }
 
@@ -955,9 +792,9 @@ function onCollectionSelection() {
 function addCollection() {
   openNameModal({
     title: 'Neue Sammlung',
-    defaultValue: `Englisch ${state.collections.length + 1}`,
+    defaultValue: `${APP_NAME} ${state.collections.length + 1}`,
     onConfirm: (name) => {
-      const trimmed = name.trim() || `Englisch ${state.collections.length + 1}`;
+      const trimmed = name.trim() || `${APP_NAME} ${state.collections.length + 1}`;
       const newCollection = {
         id: crypto.randomUUID(),
         name: trimmed,
@@ -1085,17 +922,14 @@ function attachEvents() {
       renderHomeStats();
       startLearning({ forceReset: true });
     }
-    if (action === 'rename') {
-      renameCollection(id);
-    }
-    if (action === 'delete') {
-      deleteCollection(id);
-    }
+    if (action === 'rename') renameCollection(id);
+    if (action === 'delete') deleteCollection(id);
   });
 
   window.speechSynthesis.onvoiceschanged = () => {
     if (state.learningQueue.length) {
-      speakEnglishWord(state.learningQueue[state.learningIndex].en);
+      const card = state.learningQueue[state.learningIndex];
+      if (card) speakEnglishWord(card.en);
     }
   };
 }

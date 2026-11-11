@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mein Vokabeltrainer</title>
+    <title>VocabFlow</title>
     <meta
       name="description"
-      content="Modernes Werkzeug zum Scannen, Organisieren und Lernen von Vokabeln."
+      content="VocabFlow - Scanne, organisierte und lerne Vokabeln mit einem modernen persönlichen Trainer."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,7 +16,11 @@
     />
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs" type="module"></script>
+    <script type="module">
+      import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs';
+      window.pdfjsLib = pdfjsLib;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.min.mjs';
+    </script>
   </head>
   <body>
     <div class="app-shell">
@@ -25,7 +29,7 @@
           <div class="brand-badge">V</div>
           <div>
             <p class="eyebrow">Dashboard</p>
-            <h1>Mein Vokabeltrainer</h1>
+            <h1>VocabFlow</h1>
           </div>
         </div>
 
@@ -40,10 +44,10 @@
           <div class="hero-card">
             <div class="hero-copy">
               <span class="eyebrow accent">Persönlicher Lernplan</span>
-              <h2>Scanne deine Vokabeln und lerne sie ganz einfach mit deinem persönlichen Vokabeltrainer.</h2>
+              <h2>Scanne deine Vokabeln und lerne sie einfach mit VocabFlow.</h2>
               <p>
-                Lade Bilder aus deinem Schulbuch hoch, erkenne Wörter automatisch, prüfe die Zuordnung und
-                beginne mit gezielten Lernrunden.
+                Lade Bilder oder PDF-Dateien hoch, erkenne Wörter automatisch, prüfe die Zuordnung und
+                beginne gezielte Lernrunden für deine aktuellen Themen.
               </p>
               <button class="primary-btn big-btn" id="openScanBtn">+ Vokabeln scannen</button>
             </div>
